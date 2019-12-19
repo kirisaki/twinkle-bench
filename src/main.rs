@@ -1,10 +1,10 @@
 use std::time::Instant;
-use futures::future::join;
+use futures::future::{join, join3, join_all};
 use tokio::time::{timeout, Duration};
 extern crate redis;
 use redis::Commands;
 
-const NUM: usize = 20000;
+const NUM: usize = 700;
 const WAIT: Duration = Duration::from_secs(4);
 
 macro_rules! measure {
@@ -23,17 +23,21 @@ macro_rules! measure {
 async fn main() {
     println!("set:");
     {
-        let (mut client, mut listener) = twinkle::open("127.0.0.1:3000".to_string()).await.unwrap();
-        join(
+        let (client, mut dispatcher, mut listener) = twinkle::client::Client::open("127.0.0.1:3000".to_string()).await.unwrap();
+        join3(
             timeout(WAIT, listener.listen()),
+            timeout(WAIT, dispatcher.run()),
             async move {
-                let foo = b"foo".to_vec();
-                let bar = b"bar".to_vec();
-                measure!(
-                    for _ in 0..NUM {
-                        client.set(foo.clone(), bar.clone()).await.unwrap();
-                    }
-                )
+                let mut cs = vec![];
+                for _ in 0..NUM {
+                    cs.push(async {
+                        let mut c = client.clone();
+                        c.set(b"foo".to_vec(), b"bar".to_vec()).await;
+                    })
+                };
+                measure!({
+                    join_all(cs).await;
+                })
             },
         ).await;
     }
