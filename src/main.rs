@@ -48,10 +48,7 @@ async fn main() {
         let mut cnt: u64 = 0;
         measure!(
             for _ in 0..NUM {
-                match redis_test(&mut con){
-                    Ok(_) => cnt += 1,
-                    Err(_) => {},
-                };
+                redis_test(&mut con);
             }
         );
         println!("{:?}", cnt)
