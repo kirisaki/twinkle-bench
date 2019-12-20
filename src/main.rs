@@ -3,7 +3,7 @@ use futures::future::{join3, join_all};
 use tokio::time::{timeout, Duration};
 use darkredis::ConnectionPool;
 
-const NUM: usize = 1000;
+const NUM: usize = 3000;
 const WAIT: Duration = Duration::from_secs(4);
 
 macro_rules! measure {
@@ -31,9 +31,10 @@ async fn main() {
                 for _ in 0..NUM {
                     cs.push(async {
                         let mut c = client.clone();
-                        let res0 = c.set(b"foo".to_vec(), b"bar".to_vec()).await;
-                        let res1 = c.get(b"foo".to_vec()).await;
-                                            })
+                        c.set(b"foo".to_vec(), b"bar".to_vec()).await.unwrap();
+                        let res = c.get(b"foo".to_vec()).await.unwrap();
+                        assert_eq!(res, b"bar".to_vec());
+                    })
                 };
                 measure!({
                     join_all(cs).await;
@@ -51,6 +52,7 @@ async fn main() {
                 let mut con = pool.get().await;
                 con.set("foo", "bar").await.unwrap();
                 let res = con.get("foo").await.unwrap();
+                assert_eq!(res, Some(b"bar".to_vec()));
             });
         };
         measure!({
