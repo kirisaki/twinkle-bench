@@ -1,8 +1,7 @@
 use std::time::Instant;
-use futures::future::{join, join3, join_all};
+use futures::future::{join3, join_all};
 use tokio::time::{timeout, Duration};
-extern crate redis;
-use redis::Commands;
+use darkredis::ConnectionPool;
 
 const NUM: usize = 1000;
 const WAIT: Duration = Duration::from_secs(4);
@@ -21,7 +20,7 @@ macro_rules! measure {
 
 #[tokio::main]
 async fn main() {
-    println!("set:");
+    println!("twinkle:");
     {
         let (client, mut dispatcher, mut listener) = twinkle::client::Client::open("127.0.0.1:3000".to_string()).await.unwrap();
         join3(
@@ -42,21 +41,21 @@ async fn main() {
             },
         ).await;
     }
+
+    println!("redis:");
     {
-        let client = redis::Client::open("redis://127.0.0.1/").unwrap();
-        let mut con = client.get_connection().unwrap();
-        let mut cnt: u64 = 0;
-        measure!(
-            for _ in 0..NUM {
-                redis_test(&mut con);
-            }
-        );
-        println!("{:?}", cnt)
+        let pool = ConnectionPool::create("127.0.0.1:6379".into(), None, num_cpus::get()).await.unwrap();
+        let mut cs = vec![];
+        for _ in 0..NUM {
+            cs.push(async {
+                let mut con = pool.get().await;
+                con.set("foo", "bar").await.unwrap();
+                let res = con.get("foo").await.unwrap();
+            });
+        };
+        measure!({
+            join_all(cs).await;
+        });
     }
 }
 
-fn redis_test(con: &mut redis::Connection) -> redis::RedisResult<Vec<u8>> {
-    con.set("foo", "bar")?;
-    let res = con.get("foo")?;
-    Ok(res)
-}
