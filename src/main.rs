@@ -4,7 +4,7 @@ use tokio::time::{timeout, Duration};
 extern crate redis;
 use redis::Commands;
 
-const NUM: usize = 700;
+const NUM: usize = 1000;
 const WAIT: Duration = Duration::from_secs(4);
 
 macro_rules! measure {
@@ -32,8 +32,9 @@ async fn main() {
                 for _ in 0..NUM {
                     cs.push(async {
                         let mut c = client.clone();
-                        c.set(b"foo".to_vec(), b"bar".to_vec()).await;
-                    })
+                        let res0 = c.set(b"foo".to_vec(), b"bar".to_vec()).await;
+                        let res1 = c.get(b"foo".to_vec()).await;
+                                            })
                 };
                 measure!({
                     join_all(cs).await;
@@ -44,15 +45,21 @@ async fn main() {
     {
         let client = redis::Client::open("redis://127.0.0.1/").unwrap();
         let mut con = client.get_connection().unwrap();
+        let mut cnt: u64 = 0;
         measure!(
             for _ in 0..NUM {
-                redis_test(&mut con);
+                match redis_test(&mut con){
+                    Ok(_) => cnt += 1,
+                    Err(_) => {},
+                };
             }
-        )
+        );
+        println!("{:?}", cnt)
     }
 }
 
-fn redis_test(con: &mut redis::Connection) -> redis::RedisResult<()> {
-    let _ : () = con.set("my_key", 42)?;
-    Ok(())
+fn redis_test(con: &mut redis::Connection) -> redis::RedisResult<Vec<u8>> {
+    con.set("foo", "bar")?;
+    let res = con.get("foo")?;
+    Ok(res)
 }
